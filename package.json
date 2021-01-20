@@ -1,0 +1,30 @@
+{
+  "name": "ledger-webusb-bridge",
+  "version": "0.0.1",
+  "description": "A Ledger bridge to use webusb",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "directories": {
+    "dist": "dist"
+  },
+  "prepublishOnly": "npm run build && npm run build:esm",
+  "build": "rm -rf dist/; tsc -p .",
+  "test": "ts-node node_modules/jasmine/bin/jasmine",
+  "lint": "eslint --fix .",
+  "build:esm": "tsc --module esnext --target es2016 --outDir esm --moduleResolution node --esModuleInterop true",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liquality/ledger-webusb-bridge.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jasmine": "^3.6.3",
+    "@types/node": "^14.14.22",
+    "@typescript-eslint/eslint-plugin": "^4.14.0",
+    "eslint": "^7.18.0",
+    "jasmine": "^3.6.4",
+    "jasmine-ts": "^0.3.0",
+    "ts-node": "^9.1.1"
+  }
+}

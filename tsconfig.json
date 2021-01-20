@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es2016",
+        "moduleResolution": "node",
+        "sourceMap": false,
+        "outDir": "lib",
+        "removeComments": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "experimentalDecorators": true,
+        "preserveConstEnums": true,
+        "emitDecoratorMetadata": true,
+        "declaration": true
+        
+    },
+    "exclude": ["./node_modules", "**/*.spec.ts", "examples", "tests"],
+    "include": [
+        "./src",
+        "./tests",
+        "jest.config.js"
+    ]
+}
