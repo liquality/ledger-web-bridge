@@ -1,132 +1,104 @@
-// import TransportWebUsb from '@ledgerhq/hw-transport-webusb';
-// import TransportWebBle from '@ledgerhq/hw-transport-web-ble';
-import TransportU2F from '@ledgerhq/hw-transport-u2f';
-import HWTransport from '@ledgerhq/hw-transport';
-// import BTCApp from '@ledgerhq/hw-app-btc';
-import ETHApp from '@ledgerhq/hw-app-eth';
+import Client from '@liquality/client';
+import BitcoinLedgerProvider from '@liquality/bitcoin-ledger-provider';
+import EthereumLedgerProvider from '@liquality/ethereum-ledger-provider';
+import { NetworkConfig, NetworkType } from './config'
 
-const IFRAME_NAME = 'HW-IFRAME'; 
-export type LedgerApp = 'BTC' | 'ETH';
+const IFRAME_NAME = 'HW-IFRAME';
+export type HardwareType = 'bitcoin_ledger_legacy' |
+    'bitcoin_ledger_nagive_segwit' |
+    'ethereum_ledger';
+
+export const BitcoinAddressType = {
+    bitcoin_ledger_legacy: 'legacy',
+    bitcoin_ledger_nagive_segwit: 'bech32'
+};
 
 export class LedgerTransportBridge {
-    
-    private _transport?: HWTransport<string> = null;
 
-    async getTransport (): Promise<HWTransport<string>> {
-        if (!this._transport) {
-            this._transport = await TransportU2F.create();
-        }
-        return this._transport;
+    private _clients: { [k: string]: Client } = {};
+
+    private createETHClient(networkType: NetworkType) {
+        const network = NetworkConfig.ETH[networkType];
+        const client = new Client();
+        const ledger = new EthereumLedgerProvider(network);
+        ledger.useU2F();
+        client.addProvider(ledger);
+        return client;
     }
 
-    async getApp(): Promise<ETHApp> {
-        try {
-            const transport = await this.getTransport();
-            return new ETHApp(transport);
-
-        } catch (error) {
-            console.error('Error Creating Ledger App with TransportU2F', error);
-        }
-
-        return null;
+    private createBTCClient(networkType: NetworkType, hardware: HardwareType) {
+        const network = NetworkConfig.BTC[networkType];
+        const client = new Client();
+        const addressType = BitcoinAddressType[hardware];
+        const ledger = new BitcoinLedgerProvider(network, addressType)
+        ledger.useU2F();
+        client.addProvider(ledger);
+        return client;
     }
 
-    startListening () {
+    getClient(networkType: NetworkType, hardware: HardwareType) {
+        const key = `${hardware}-${networkType}`;
+
+        if (!this._clients.hasOwnProperty(key)) {
+            if ([
+                'bitcoin_ledger_legacy',
+                'bitcoin_ledger_nagive_segwit'
+            ].includes(hardware)) {
+                this._clients[key] = this.createBTCClient(networkType, hardware);
+            } else if (hardware === 'ethereum_ledger') {
+                this._clients[key] = this.createETHClient(networkType);
+            } else {
+                throw new Error(`No client available for: ${key}`);
+            }
+        }
+
+        return this._clients[key];
+    }
+
+    startListening() {
         window.addEventListener('message', async (event: MessageEvent) => {
+            console.log('on bridge', event);
             if (event) {
                 const { data } = event;
-                const { action, target, params } = data;
+                const {
+                    target,
+                    hw,
+                    network,
+                    ns,
+                    method,
+                    payload
+                } = data;
                 if (target === IFRAME_NAME) {
-                    console.log('on message in bridge', event);
-                    var replyAction = action + '-reply';
-                    switch (action) {
-                        case 'unlock':
-                            await this.unlock(replyAction, params.hdPath);
-                            break;
-                        case 'ledger-sign-transaction':
-                            // _this.signTransaction(replyAction, params.hdPath, params.tx, params.to);
-                            break;
-                        case 'ledger-sign-personal-message':
-                            // _this.signPersonalMessage(replyAction, params.hdPath, params.message);
-                            break;
+                    const reply = `reply::${hw}::${ns}.${method}`;
+                    try {
+                        const client = this.getClient(network, hw);
+                        const component = client[ns];
+                        const call = component[method].bind(component);
+                        const result = await call(...payload);
+
+                        this.sendMessage({
+                            action: reply,
+                            success: true,
+                            payload: result
+                        });
+                    } catch (error) {
+                        this.sendMessage({
+                            action: reply,
+                            success: false,
+                            payload: error
+                        });
                     }
                 }
             }
         });
     }
 
-    sendMessage (message: any) {
+    sendMessage(message: {
+        action: string,
+        success: boolean,
+        payload: any
+    }) {
         //TODO: check for the origin *
         window.parent.postMessage(message, '*');
-    }
-
-    async unlock (replyAction: string, hdPath: string) {
-        try {
-            const app = await this.getApp();
-            var res = await app.getAddress(hdPath, false, true);
-
-            this.sendMessage({
-                action: replyAction,
-                success: true,
-                payload: res
-            });
-        } catch (err) {
-            this.sendMessage({
-                action: replyAction,
-                success: false,
-                payload: { error: this.parseLedgerError(err) }
-            });
-        } finally {
-            this.cleanUp();
-        }
-    }
-
-    parseLedgerError (err: any) {
-        var isU2FError = function isU2FError(err) {
-            return !!err && !!err.metaData;
-        };
-        var isStringError = function isStringError(err) {
-            return typeof err === 'string';
-        };
-        var isErrorWithId = function isErrorWithId(err) {
-            return err.hasOwnProperty('id') && err.hasOwnProperty('message');
-        };
-
-        // https://developers.yubico.com/U2F/Libraries/Client_error_codes.html
-        if (isU2FError(err)) {
-            // Timeout
-            if (err.metaData.code === 5) {
-                return 'LEDGER_TIMEOUT';
-            }
-
-            return err.metaData.type;
-        }
-
-        if (isStringError(err)) {
-            // Wrong app logged into
-            if (err.includes('6804')) {
-                return 'LEDGER_WRONG_APP';
-            }
-            // Ledger locked
-            if (err.includes('6801')) {
-                return 'LEDGER_LOCKED';
-            }
-
-            return err;
-        }
-
-        if (isErrorWithId(err)) {
-            // Browser doesn't support U2F
-            if (err.message.includes('U2F not supported')) {
-                return 'U2F_NOT_SUPPORTED';
-            }
-        }
-
-        // Other
-        return err.toString();
-    }
-
-    cleanUp () {
-        this._transport?.close();
     }
 }
