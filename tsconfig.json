@@ -7,7 +7,7 @@
     "outDir": "dist",
     "removeComments": true,
     "esModuleInterop": true,
-    "declaration": true,
+    "declaration": false,
     "allowSyntheticDefaultImports": true
   },
   "exclude": ["./node_modules", "**/*.spec.ts", "examples", "tests"],

@@ -1,9 +1,9 @@
 import './polyfills';
 
-import { LedgerTransportBridge } from "./LedgerTransportBridge";
+import { LedgerWebBridge } from "./LedgerWebBridge";
 
 const run = () => {
-    const bridge = new LedgerTransportBridge();
+    const bridge = new LedgerWebBridge();
     bridge.startListening();
 }
 
