@@ -5,6 +5,7 @@ import BTC from "@ledgerhq/hw-app-btc";
 
 const IFRAME_NAME = 'HW-IFRAME';
 
+export type AppType = 'ETH' | 'BTC';
 
 export class LedgerWebBridge {
 
@@ -44,7 +45,7 @@ export class LedgerWebBridge {
         }
         
     }
-    private async createLedgerApp (appType: 'ETH' | 'BTC'): Promise<BTC | ETH> {
+    private async createLedgerApp (appType: AppType): Promise<BTC | ETH> {
             await this.ensureTransportCreated();
 
             if (!this._apps[appType]) {
@@ -60,14 +61,15 @@ export class LedgerWebBridge {
     startListening () {
         window.addEventListener('message', async (event: MessageEvent) => {
             if (event) {
-                const { data } = event;
+                const { data, currentTarget } = event;
                 const {
                     target,
                     app,
                     method,
                     payload
                 } = data;
-                if (target === IFRAME_NAME) {
+                const { name } = currentTarget as any;
+                if (name === IFRAME_NAME) {
                     console.log('RECEIVED MESSAGE ON BRIDGE:', event);
                     const reply = `reply::${app}::${method}`;
                     try {

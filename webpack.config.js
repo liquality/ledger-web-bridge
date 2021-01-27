@@ -3,6 +3,8 @@ const webpack = require('webpack');
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
 
 module.exports = {
+  watch: true,
+  
   entry: path.resolve(__dirname, 'src'),
 
   output: {
@@ -13,9 +15,7 @@ module.exports = {
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.json'],
     fallback: { 
-        // "buffer": require.resolve("buffer/"),
-        // "stream": require.resolve("stream-browserify"),
-        // "assert": require.resolve("assert/")
+        "buffer": require.resolve("buffer/")
     }
   },
 
@@ -28,5 +28,11 @@ module.exports = {
     new webpack.ProvidePlugin({
         process: 'process/browser',
       }),
-  ]
+  ],
+  devServer: {
+    https: true,
+    contentBase: path.join(__dirname, 'dist'),
+    compress: true,
+    port: 9000
+  }
 };
