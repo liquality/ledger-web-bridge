@@ -3,104 +3,154 @@ import TransportU2F from '@ledgerhq/hw-transport-u2f'
 import ETH from "@ledgerhq/hw-app-eth";
 import BTC from "@ledgerhq/hw-app-btc";
 
-const IFRAME_NAME = 'HW-IFRAME';
+const BRIDGE_IFRAME_NAME = 'HW-IFRAME';
+declare var chrome: any;
 
 export type AppType = 'ETH' | 'BTC';
+export type CallType = 'METHOD' | 'ASYNC_METHOD' | 'PROP';
+export interface CallData {
+    app: AppType,
+    method: string,
+    payload: any,
+    callType: CallType
+}
 
 export class LedgerWebBridge {
 
-    private _transport?: TransportU2F = null;
+    private _transports: {
+        ETH?: TransportU2F,
+        BTC?: TransportU2F
+    } = { ETH: null, BTC: null };
     private _apps: {
         ETH?: ETH,
         BTC?: BTC
-    } = { ETH: null, BTC: null};
+    } = { ETH: null, BTC: null };
 
-    private async clear (): Promise<void> {
+    private async clear(): Promise<void> {
         this._apps.BTC = null;
         this._apps.ETH = null;
-        await this._transport?.close();
-        this._transport = null;
+
+        await this._transports.BTC?.close();
+        await this._transports.ETH?.close();
+        this._transports = { ETH: null, BTC: null };
     }
 
-    private async ensureTransportCreated (): Promise<void> {
-        if (!this._transport) {
+    private async ensureTransportCreated(appType: AppType, origin: string): Promise<void> {
+        if (!this._transports[appType]) {
             try {
-                this._transport = await TransportU2F.create();
-                this._transport?.on('disconnect', async () => {
+                this._transports[appType] = await TransportU2F.create();
+                this._transports[appType].on('disconnect', async () => {
                     await this.clear();
-                    this.sendMessage({ 
-                        action: 'transport::disconnect', 
-                        success: true 
+                    this.sendMessage(origin, {
+                        action: `transport::${appType}::disconnect`,
+                        success: true
                     });
                 })
             } catch (error) {
                 await this.clear();
                 console.error(error);
-                this.sendMessage({ 
-                    action: 'transport::error', 
-                    success: false, 
-                    payload: error 
+                this.sendMessage(origin, {
+                    action: `transport::${appType}::error`,
+                    success: false,
+                    payload: error
                 });
             }
         }
-        
-    }
-    private async createLedgerApp (appType: AppType): Promise<BTC | ETH> {
-            await this.ensureTransportCreated();
 
-            if (!this._apps[appType]) {
-                this._apps[appType] = {
-                    ETH: new ETH(this._transport),
-                    BTC: new BTC(this._transport)
-                }[appType]; 
-            }
+    }
+
+    private async createLedgerApp(appType: AppType, origin: string): Promise<BTC | ETH> {
+        await this.ensureTransportCreated(appType, origin);
+
+        if (!this._apps[appType]) {
+            this._apps[appType] = {
+                ETH: new ETH(this._transports[appType]),
+                BTC: new BTC(this._transports[appType])
+            }[appType];
+        }
 
         return this._apps[appType];
     }
 
-    startListening () {
+    startListening() {
         window.addEventListener('message', async (event: MessageEvent) => {
-            if (event) {
-                const { data, currentTarget } = event;
-                const {
-                    target,
-                    app,
-                    method,
-                    payload
-                } = data;
-                const { name } = currentTarget as any;
-                if (name === IFRAME_NAME) {
-                    console.log('RECEIVED MESSAGE ON BRIDGE:', event);
-                    const reply = `reply::${app}::${method}`;
-                    try {
-                        const ledgerApp = await this.createLedgerApp(app);
-                        const call = ledgerApp[method].bind(ledgerApp);
-                        const result = await call(...payload);
+            if (!event) {
+                return
+            }
 
-                        this.sendMessage({
+            const { data, currentTarget, origin } = event;
+            if (!data || !origin || !origin.startsWith('chrome-extension://')) {
+                return
+            }
+            console.log('RECEIVED MESSAGE ON BRIDGE:', event);
+            const {
+                app,
+                method,
+                payload,
+                callType
+            } = data as CallData;
+            const { name } = currentTarget as any;
+            const replyOrigin = origin.replace('chrome-extension://', '')
+
+            if (name === BRIDGE_IFRAME_NAME && method) {
+                const reply = `reply::${app}::${method}::${callType}`;
+                try {
+                    const ledgerApp = await this.createLedgerApp(app, replyOrigin);
+                    let call = null;
+                    let result = null;
+
+                    if (method.startsWith('TRANSPORT::')) {
+                        const methodParts = method.split('::');
+                        const { transport } = ledgerApp
+                        call = transport[methodParts[1]].bind(transport);
+                    } else {
+                        call = ledgerApp[method].bind(ledgerApp);
+                    }
+
+                    switch (callType) {
+                        case 'METHOD':
+                            result = call(...payload);
+                            break;
+                        case 'ASYNC_METHOD':
+                            result = await call(...payload);
+                            break;
+                        case 'PROP':
+                            result = call;
+                            break;
+                        default:
+                            break;
+                    }
+
+                    this.sendMessage(replyOrigin,
+                        {
                             action: reply,
                             success: true,
                             payload: result
                         });
-                    } catch (error) {
-                        await this.clear();
-                        this.sendMessage({
+                } catch (error) {
+                    await this.clear();
+                    this.sendMessage(replyOrigin,
+                        {
                             action: reply,
                             success: false,
                             payload: error
                         });
-                    }
                 }
             }
         });
     }
 
-    sendMessage(message: {
+    sendMessage(origin: string, message: {
         action: string,
         success: boolean,
         payload?: any
     }) {
-        //TODO: check for the origin *
-        window.parent.postMessage(message, '*');
+        console.log('[HW-BRIDGE]: Sending response', origin, message)
+        //window.parent.postMessage(message, '*');
+        chrome.runtime.sendMessage(origin, message, (response: any) => {
+            console.log('[HW-BRIDGE]: received message result', response);
+        });
+
+
     }
 }

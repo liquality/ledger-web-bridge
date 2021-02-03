@@ -1,3 +1,5 @@
+var global = global || window;
+
 import './polyfills';
 
 import { LedgerWebBridge } from "./LedgerWebBridge";
