@@ -1,6 +1,8 @@
 const path = require('path');
 const webpack = require('webpack');
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const CopyPlugin = require("copy-webpack-plugin");
 
 module.exports = {
   watch: true,
@@ -27,6 +29,13 @@ module.exports = {
     new ForkTsCheckerWebpackPlugin(),
     new webpack.ProvidePlugin({
         process: 'process/browser',
+      }),
+      new CopyPlugin({
+        patterns: [
+          {
+            from: "src/index.html"
+          },
+        ],
       }),
   ],
   devServer: {
