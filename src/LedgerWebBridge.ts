@@ -2,18 +2,9 @@
 import TransportU2F from '@ledgerhq/hw-transport-u2f'
 import ETH from "@ledgerhq/hw-app-eth";
 import BTC from "@ledgerhq/hw-app-btc";
+import { AppType, CallData, BRIDGE_IFRAME_NAME, BUFFER_PARAM_METHODS } from './config';
 
-const BRIDGE_IFRAME_NAME = 'HW-IFRAME';
 declare var chrome: any;
-
-export type AppType = 'ETH' | 'BTC';
-export type CallType = 'METHOD' | 'ASYNC_METHOD' | 'PROP';
-export interface CallData {
-    app: AppType,
-    method: string,
-    payload: any,
-    callType: CallType
-}
 
 export class LedgerWebBridge {
 
@@ -107,12 +98,14 @@ export class LedgerWebBridge {
                         call = ledgerApp[method].bind(ledgerApp);
                     }
 
+                    const parsedPayload = this.parsePayload(app, method, payload)
+
                     switch (callType) {
                         case 'METHOD':
-                            result = call(...payload);
+                            result = call(...parsedPayload);
                             break;
                         case 'ASYNC_METHOD':
-                            result = await call(...payload);
+                            result = await call(...parsedPayload);
                             break;
                         case 'PROP':
                             result = call;
@@ -146,11 +139,18 @@ export class LedgerWebBridge {
         payload?: any
     }) {
         console.log('[HW-BRIDGE]: Sending response', origin, message)
-        //window.parent.postMessage(message, '*');
         chrome.runtime.sendMessage(origin, message, (response: any) => {
             console.log('[HW-BRIDGE]: received message result', response);
         });
+    }
 
+    parsePayload(appType: AppType, method: string, payload: any): any {
 
+        if(BUFFER_PARAM_METHODS[appType] && 
+            BUFFER_PARAM_METHODS[appType].includes(method)) {
+                // TODO: pase buffers
+        }
+
+        return payload
     }
 }
