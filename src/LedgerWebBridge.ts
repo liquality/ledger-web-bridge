@@ -2,7 +2,14 @@
 import TransportU2F from '@ledgerhq/hw-transport-u2f'
 import ETH from "@ledgerhq/hw-app-eth";
 import BTC from "@ledgerhq/hw-app-btc";
-import { AppType, CallData, BRIDGE_IFRAME_NAME, BUFFER_PARAM_METHODS } from './config';
+import { 
+    AppType, 
+    CallData, 
+    BRIDGE_IFRAME_NAME, 
+    BUFFER_PARAM_METHODS_OUT, 
+    BUFFER_PARAM_METHODS_IN 
+} from './config';
+import { parseInputBuffer, parseOutputBuffer } from './utils';
 
 declare var chrome: any;
 
@@ -98,14 +105,14 @@ export class LedgerWebBridge {
                         call = ledgerApp[method].bind(ledgerApp);
                     }
 
-                    const parsedPayload = this.parsePayload(app, method, payload)
-
+                    const parsedInput = this.parseInputPayload(app, method, payload)
+                    console.log('[parsed input]', parsedInput);
                     switch (callType) {
                         case 'METHOD':
-                            result = call(...parsedPayload);
+                            result = call(...parsedInput);
                             break;
                         case 'ASYNC_METHOD':
-                            result = await call(...parsedPayload);
+                            result = await call(...parsedInput);
                             break;
                         case 'PROP':
                             result = call;
@@ -114,11 +121,13 @@ export class LedgerWebBridge {
                             break;
                     }
 
+                    const parsedOutput = this.parseOutputPayload(app, method, result)
+
                     this.sendMessage(replyOrigin,
                         {
                             action: reply,
                             success: true,
-                            payload: result
+                            payload: parsedOutput
                         });
                 } catch (error) {
                     await this.clear();
@@ -144,13 +153,23 @@ export class LedgerWebBridge {
         });
     }
 
-    parsePayload(appType: AppType, method: string, payload: any): any {
+    parseInputPayload(appType: AppType, method: string, payload: any): any {
 
-        if(BUFFER_PARAM_METHODS[appType] && 
-            BUFFER_PARAM_METHODS[appType].includes(method)) {
-                // TODO: pase buffers
+        if(BUFFER_PARAM_METHODS_IN[appType] && 
+            BUFFER_PARAM_METHODS_IN[appType].includes(method)) {
+                return parseInputBuffer(payload);
         }
 
-        return payload
+        return payload;
+    }
+
+    parseOutputPayload(appType: AppType, method: string, payload: any): any {
+
+        if(BUFFER_PARAM_METHODS_OUT[appType] && 
+            BUFFER_PARAM_METHODS_OUT[appType].includes(method)) {
+                return parseOutputBuffer(payload);
+        }
+
+        return payload;
     }
 }
