@@ -1,7 +1,7 @@
 export const parseInputBuffer = (input: any): any => {
     if (input) {
-        if(input.data && input.type && input.type === 'Buffer') {
-            return Buffer.from(input.data);
+        if(input.data && input.type && input.type === 'Hex') {
+            return Buffer.from(input.data, 'hex');
         }
     
         if(input instanceof Array) {
@@ -22,7 +22,7 @@ export const parseInputBuffer = (input: any): any => {
 
 export const parseOutputBuffer = (input: any): any => {
     if(input instanceof Buffer) {
-        return input.toString('hex');
+        return { type: 'Hex', data: input.toString('hex') };
     }
 
     if(input instanceof Array) {

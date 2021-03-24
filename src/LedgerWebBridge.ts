@@ -80,7 +80,7 @@ export class LedgerWebBridge {
             if (!data || !origin || !origin.startsWith('chrome-extension://')) {
                 return
             }
-            console.log('RECEIVED MESSAGE ON BRIDGE:', event);
+            console.log('[LEDGER-BRIDGE::MESSAGE RECEIVED]::', event);
             const {
                 app,
                 method,
@@ -106,7 +106,7 @@ export class LedgerWebBridge {
                     }
 
                     const parsedInput = this.parseInputPayload(app, method, payload)
-                    console.log('[parsed input]', parsedInput);
+                    console.log('[LEDGER-BRIDGE::AFTER PARSE INPUT]', parsedInput);
                     switch (callType) {
                         case 'METHOD':
                             result = call(...parsedInput);
@@ -147,29 +147,19 @@ export class LedgerWebBridge {
         success: boolean,
         payload?: any
     }) {
-        console.log('[HW-BRIDGE]: Sending response', origin, message)
+        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, message)
         chrome.runtime.sendMessage(origin, message, (response: any) => {
-            console.log('[HW-BRIDGE]: received message result', response);
+            //console.log('[HW-BRIDGE]: received message result', response);
         });
     }
 
     parseInputPayload(appType: AppType, method: string, payload: any): any {
 
-        if(BUFFER_PARAM_METHODS_IN[appType] && 
-            BUFFER_PARAM_METHODS_IN[appType].includes(method)) {
-                return parseInputBuffer(payload);
-        }
-
-        return payload;
+        return parseInputBuffer(payload);
     }
 
     parseOutputPayload(appType: AppType, method: string, payload: any): any {
 
-        if(BUFFER_PARAM_METHODS_OUT[appType] && 
-            BUFFER_PARAM_METHODS_OUT[appType].includes(method)) {
-                return parseOutputBuffer(payload);
-        }
-
-        return payload;
+         return parseOutputBuffer(payload);
     }
 }
