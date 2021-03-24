@@ -33,9 +33,7 @@ export const parseOutputBuffer = (input: any): any => {
         if(Object.keys(input).length > 0) {
             const output = {};
             for (const key in input) {
-                if (Object.prototype.hasOwnProperty.call(input, key)) {
-                    output[key] = parseOutputBuffer(input[key]);
-                }
+                output[key] = parseOutputBuffer(input[key]);
             }
             return output;
         }
