@@ -1,17 +1,17 @@
-export const parseInputBuffer = (payload: any): any => {
+export const parseInputPayload = (payload: any): any => {
     if (payload) {
         if(payload.type && payload.type === 'Hex') {
             return Buffer.from(payload.data || '', 'hex');
         }
     
         if(payload instanceof Array) {
-            return payload.map(i=> parseInputBuffer(i));
+            return payload.map(i=> parseInputPayload(i));
         }
     
         if(typeof payload === 'object' && Object.keys(payload).length > 0) {
             const output = {};
             for (const key in payload) {
-                output[key] = parseInputBuffer(payload[key]);
+                output[key] = parseInputPayload(payload[key]);
             }
             return output;
         }
@@ -20,20 +20,20 @@ export const parseInputBuffer = (payload: any): any => {
     return payload
 }
 
-export const parseOutputBuffer = (payload: any): any => {
+export const parseOutputPayload = (payload: any): any => {
     if(payload instanceof Buffer) {
         return { type: 'Hex', data: payload.toString('hex') };
     }
 
     if(payload instanceof Array) {
-        return payload.map(i=> parseOutputBuffer(i));
+        return payload.map(i=> parseOutputPayload(i));
     }
 
     if (payload && typeof payload === 'object') {
         if(Object.keys(payload).length > 0) {
             const output = {};
             for (const key in payload) {
-                output[key] = parseOutputBuffer(payload[key]);
+                output[key] = parseOutputPayload(payload[key]);
             }
             return output;
         }

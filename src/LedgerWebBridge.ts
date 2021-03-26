@@ -5,11 +5,9 @@ import BTC from "@ledgerhq/hw-app-btc";
 import { 
     AppType, 
     CallData, 
-    BRIDGE_IFRAME_NAME, 
-    BUFFER_PARAM_METHODS_OUT, 
-    BUFFER_PARAM_METHODS_IN 
+    BRIDGE_IFRAME_NAME
 } from './config';
-import { parseInputBuffer, parseOutputBuffer } from './utils';
+import { parseInputPayload, parseOutputPayload } from './utils';
 
 declare var chrome: any;
 
@@ -105,8 +103,8 @@ export class LedgerWebBridge {
                         call = ledgerApp[method].bind(ledgerApp);
                     }
 
-                    const parsedInput = this.parseInputPayload(app, method, payload)
-                    console.log('[LEDGER-BRIDGE::AFTER PARSE INPUT]', parsedInput);
+                    const parsedInput = parseInputPayload(payload)
+
                     switch (callType) {
                         case 'METHOD':
                             result = call(...parsedInput);
@@ -121,7 +119,7 @@ export class LedgerWebBridge {
                             break;
                     }
 
-                    const parsedOutput = this.parseOutputPayload(app, method, result)
+                    const parsedOutput = parseOutputPayload(result)
 
                     this.sendMessage(replyOrigin,
                         {
@@ -151,15 +149,5 @@ export class LedgerWebBridge {
         chrome.runtime.sendMessage(origin, message, (response: any) => {
             //console.log('[HW-BRIDGE]: received message result', response);
         });
-    }
-
-    parseInputPayload(appType: AppType, method: string, payload: any): any {
-
-        return parseInputBuffer(payload);
-    }
-
-    parseOutputPayload(appType: AppType, method: string, payload: any): any {
-
-         return parseOutputBuffer(payload);
     }
 }

@@ -10,14 +10,3 @@ export interface CallData {
     payload: any,
     callType: CallType
 }
-
-export const BUFFER_PARAM_METHODS_IN: {
-    [A in AppType]?: string[];
-  } = {
-    'BTC' : ['createPaymentTransactionNew']
-};
-export const BUFFER_PARAM_METHODS_OUT: {
-  [A in AppType]?: string[];
-} = {
-  'BTC' : ['serializeTransactionOutputs', 'createPaymentTransactionNew']
-};
