@@ -2,18 +2,14 @@
 import TransportU2F from '@ledgerhq/hw-transport-u2f'
 import ETH from "@ledgerhq/hw-app-eth";
 import BTC from "@ledgerhq/hw-app-btc";
+import { 
+    AppType, 
+    CallData, 
+    BRIDGE_IFRAME_NAME
+} from './config';
+import { parseInputPayload, parseOutputPayload } from './utils';
 
-const BRIDGE_IFRAME_NAME = 'HW-IFRAME';
 declare var chrome: any;
-
-export type AppType = 'ETH' | 'BTC';
-export type CallType = 'METHOD' | 'ASYNC_METHOD' | 'PROP';
-export interface CallData {
-    app: AppType,
-    method: string,
-    payload: any,
-    callType: CallType
-}
 
 export class LedgerWebBridge {
 
@@ -82,7 +78,7 @@ export class LedgerWebBridge {
             if (!data || !origin || !origin.startsWith('chrome-extension://')) {
                 return
             }
-            console.log('RECEIVED MESSAGE ON BRIDGE:', event);
+            console.log('[LEDGER-BRIDGE::MESSAGE RECEIVED]::', event);
             const {
                 app,
                 method,
@@ -107,12 +103,14 @@ export class LedgerWebBridge {
                         call = ledgerApp[method].bind(ledgerApp);
                     }
 
+                    const parsedInput = parseInputPayload(payload)
+
                     switch (callType) {
                         case 'METHOD':
-                            result = call(...payload);
+                            result = call(...parsedInput);
                             break;
                         case 'ASYNC_METHOD':
-                            result = await call(...payload);
+                            result = await call(...parsedInput);
                             break;
                         case 'PROP':
                             result = call;
@@ -121,11 +119,13 @@ export class LedgerWebBridge {
                             break;
                     }
 
+                    const parsedOutput = parseOutputPayload(result)
+
                     this.sendMessage(replyOrigin,
                         {
                             action: reply,
                             success: true,
-                            payload: result
+                            payload: parsedOutput
                         });
                 } catch (error) {
                     await this.clear();
@@ -145,12 +145,9 @@ export class LedgerWebBridge {
         success: boolean,
         payload?: any
     }) {
-        console.log('[HW-BRIDGE]: Sending response', origin, message)
-        //window.parent.postMessage(message, '*');
+        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, message)
         chrome.runtime.sendMessage(origin, message, (response: any) => {
-            console.log('[HW-BRIDGE]: received message result', response);
+            //console.log('[HW-BRIDGE]: received message result', response);
         });
-
-
     }
 }

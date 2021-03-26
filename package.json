@@ -44,8 +44,8 @@
     "webpack-dev-server": "^3.11.2"
   },
   "dependencies": {
-    "@ledgerhq/hw-app-btc": "^5.41.0",
-    "@ledgerhq/hw-app-eth": "^5.41.0",
+    "@ledgerhq/hw-app-btc": "^5.46.0",
+    "@ledgerhq/hw-app-eth": "^5.47.3",
     "@ledgerhq/hw-transport-u2f": "^5.36.0-deprecated",
     "buffer": "^6.0.3",
     "process": "^0.11.10"
