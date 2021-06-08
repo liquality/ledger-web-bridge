@@ -63,7 +63,7 @@ export const checkWSTransportLoop = (iteration: number = 0): Promise<void> => {
         }
     })
 }
-export const createWebsocketTransport = async (app: string, useLedgerLive: boolean): Promise<Transport> => {
+export const createLedgerTransport = async (app: string, useLedgerLive: boolean): Promise<Transport> => {
     if (useLedgerLive) {
         let reestablish = false;
         try {

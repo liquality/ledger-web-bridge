@@ -2,12 +2,12 @@
 import TransportU2F from '@ledgerhq/hw-transport-u2f'
 import ETH from "@ledgerhq/hw-app-eth";
 import BTC from "@ledgerhq/hw-app-btc";
-import { 
-    AppType, 
-    CallData, 
+import {
+    AppType,
+    CallData,
     BRIDGE_IFRAME_NAME
 } from './config';
-import { createWebsocketTransport, parseInputPayload, parseOutputPayload } from './utils';
+import { createLedgerTransport, parseInputPayload, parseOutputPayload } from './utils';
 
 declare var chrome: any;
 
@@ -37,7 +37,7 @@ export class LedgerWebBridge {
     private async ensureTransportCreated(appType: AppType, origin: string): Promise<void> {
         if (!this._transports[appType]) {
             try {
-                this._transports[appType] = await createWebsocketTransport(appType, this._useLedgerLive);
+                this._transports[appType] = await createLedgerTransport(appType, this._useLedgerLive);
                 this._transports[appType].on('disconnect', async () => {
                     await this.clear();
                     this.sendMessage(origin, {
@@ -117,9 +117,9 @@ export class LedgerWebBridge {
                             const ledgerApp = await this.createLedgerApp(app, replyOrigin);
                             call = ledgerApp[method].bind(ledgerApp);
                         }
-    
+
                         const parsedInput = parseInputPayload(payload)
-    
+
                         switch (callType) {
                             case 'METHOD':
                                 result = call(...parsedInput);
@@ -133,9 +133,9 @@ export class LedgerWebBridge {
                             default:
                                 break;
                         }
-    
+
                         const parsedOutput = parseOutputPayload(result)
-    
+
                         this.sendMessage(replyOrigin,
                             {
                                 action: reply,
@@ -162,12 +162,12 @@ export class LedgerWebBridge {
         payload?: any
     }) {
         console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, message)
-        chrome.runtime.sendMessage(origin, 
+        chrome.runtime.sendMessage(origin,
             {
                 ...message,
                 useLedgerLive: this._useLedgerLive
             }, (response: any) => {
-            //console.log('[HW-BRIDGE]: received message result', response);
-        });
+                //console.log('[HW-BRIDGE]: received message result', response);
+            });
     }
 }
