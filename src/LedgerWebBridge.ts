@@ -71,6 +71,10 @@ export class LedgerWebBridge {
         return this._apps[appType];
     }
 
+    private async messageListener (event: MessageEvent) {
+        
+    }
+
     startListening() {
         window.addEventListener('message', async (event: MessageEvent) => {
             if (!event) {
@@ -90,17 +94,16 @@ export class LedgerWebBridge {
             } = data as CallData;
             const { name } = currentTarget as any;
             const replyOrigin = origin.replace('chrome-extension://', '')
-
+            
             if (name === BRIDGE_IFRAME_NAME && method) {
                 const reply = `reply::${app}::${method}::${callType}`;
                 try {
                     let call = null;
                     let result = null;
-
                     if (method === 'UPDATE-TRANSPORT-PREFERENCE') {
                         const { useLedgerLive } = payload;
-                        this._useLedgerLive = useLedgerLive;
                         await this.clear();
+                        this._useLedgerLive = useLedgerLive;
                         this.sendMessage(replyOrigin,
                             {
                                 action: reply,
@@ -153,7 +156,7 @@ export class LedgerWebBridge {
                         });
                 }
             }
-        });
+        }, false);
     }
 
     sendMessage(origin: string, message: {
@@ -161,12 +164,15 @@ export class LedgerWebBridge {
         success: boolean,
         payload?: any
     }) {
-        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, message)
+        debugger;
+        const data = {
+            ...message,
+            useLedgerLive: this._useLedgerLive
+        }
+        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, data);
         chrome.runtime.sendMessage(origin,
-            {
-                ...message,
-                useLedgerLive: this._useLedgerLive
-            }, (response: any) => {
+            data, 
+            (response: any) => {
                 //console.log('[HW-BRIDGE]: received message result', response);
             });
     }

@@ -66,17 +66,18 @@ export const checkWSTransportLoop = (iteration: number = 0): Promise<void> => {
 export const createLedgerTransport = async (app: string, useLedgerLive: boolean): Promise<Transport> => {
     if (useLedgerLive) {
         let reestablish = false;
+
         try {
             await WebSocketTransport.check(LEDGER_LIVE_URL)
         } catch (_err) {
-            const appName = LEDGER_APP_NAMES[app];
+            const appName: string = LEDGER_APP_NAMES[app];
             window.open(`ledgerlive://bridge?appName=${appName}`);
             await checkWSTransportLoop();
             reestablish = true;
         }
+
         if (reestablish) {
             return await WebSocketTransport.open(LEDGER_LIVE_URL);
-            
         }
     }
     else {
