@@ -164,7 +164,6 @@ export class LedgerWebBridge {
         success: boolean,
         payload?: any
     }) {
-        debugger;
         const data = {
             ...message,
             useLedgerLive: this._useLedgerLive
