@@ -1,3 +1,6 @@
+import WebSocketTransport from '@ledgerhq/hw-transport-http/lib/WebSocketTransport';
+import { LEDGER_LIVE_URL, TRANSPORT_CHECK_DELAY, TRANSPORT_CHECK_LIMIT } from './config';
+
 export const parseInputPayload = (payload: any): any => {
     if (payload) {
         if(payload.type && payload.type === 'Hex') {
@@ -40,4 +43,21 @@ export const parseOutputPayload = (payload: any): any => {
     }
 
     return payload
+}
+
+
+export const makeDelay = async (ms: number): Promise<void> =>  {
+    return new Promise((success) => setTimeout(success, ms))
+};
+
+export const checkWSTransportLoop = async (iteration: number = 0): Promise<void> => {
+    const iterator = iteration || 0
+    return await WebSocketTransport.check(LEDGER_LIVE_URL).catch(async () => {
+        await makeDelay(TRANSPORT_CHECK_DELAY)
+        if (iterator < TRANSPORT_CHECK_LIMIT) {
+            return checkWSTransportLoop(iterator + 1)
+        } else {
+            throw new Error('Ledger transport check timeout')
+        }
+    })
 }
