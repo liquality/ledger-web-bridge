@@ -4,55 +4,70 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LedgerWebBridge = void 0;
-const hw_transport_u2f_1 = __importDefault(require("@ledgerhq/hw-transport-u2f"));
 const hw_app_eth_1 = __importDefault(require("@ledgerhq/hw-app-eth"));
 const hw_app_btc_1 = __importDefault(require("@ledgerhq/hw-app-btc"));
 const config_1 = require("./config");
 const utils_1 = require("./utils");
+const hw_transport_u2f_1 = __importDefault(require("@ledgerhq/hw-transport-u2f"));
+const WebSocketTransport_1 = __importDefault(require("@ledgerhq/hw-transport-http/lib/WebSocketTransport"));
 class LedgerWebBridge {
     constructor() {
-        this._transports = { ETH: null, BTC: null };
-        this._apps = { ETH: null, BTC: null };
+        this._transport = null;
+        this._useLedgerLive = false;
+        this._app = null;
     }
     async clear() {
-        this._apps.BTC = null;
-        this._apps.ETH = null;
-        await this._transports.BTC?.close();
-        await this._transports.ETH?.close();
-        this._transports = { ETH: null, BTC: null };
+        await this._transport?.close();
+        this._app = null;
     }
-    async ensureTransportCreated(appType, origin) {
-        if (!this._transports[appType]) {
+    appShouldBeCreated(appType) {
+        if (!this._app
+            || this._app instanceof hw_app_btc_1.default && appType === 'ETH'
+            || this._app instanceof hw_app_eth_1.default && appType === 'BTC') {
+            return true;
+        }
+        return false;
+    }
+    async setupLedgerApp(appType, origin) {
+        if (this._useLedgerLive) {
+            let reestablish = false;
             try {
-                this._transports[appType] = await hw_transport_u2f_1.default.create();
-                this._transports[appType].on('disconnect', async () => {
-                    await this.clear();
-                    this.sendMessage(origin, {
-                        action: `transport::${appType}::disconnect`,
-                        success: true
-                    });
-                });
+                await WebSocketTransport_1.default.check(config_1.LEDGER_LIVE_URL);
             }
-            catch (error) {
-                await this.clear();
-                console.error(error);
-                this.sendMessage(origin, {
-                    action: `transport::${appType}::error`,
-                    success: false,
-                    payload: error
-                });
+            catch (_err) {
+                const appName = config_1.LEDGER_APP_NAMES[appType];
+                window.open(`ledgerlive://bridge?appName=${appName}`);
+                await utils_1.checkWSTransportLoop();
+                reestablish = true;
+            }
+            if (this.appShouldBeCreated(appType) || reestablish) {
+                this._transport = await WebSocketTransport_1.default.open(config_1.LEDGER_LIVE_URL);
+                this.createLedgerApp(appType);
             }
         }
+        else {
+            this._transport = await hw_transport_u2f_1.default.create();
+            this.createLedgerApp(appType);
+        }
+        this._transport?.on('disconnect', async () => {
+            await this.clear();
+            this.sendMessage(origin, {
+                action: `transport::${appType}::disconnect`,
+                success: true
+            });
+        });
     }
-    async createLedgerApp(appType, origin) {
-        await this.ensureTransportCreated(appType, origin);
-        if (!this._apps[appType]) {
-            this._apps[appType] = {
-                ETH: new hw_app_eth_1.default(this._transports[appType]),
-                BTC: new hw_app_btc_1.default(this._transports[appType])
-            }[appType];
+    createLedgerApp(appType) {
+        switch (appType) {
+            case 'ETH':
+                this._app = new hw_app_eth_1.default(this._transport);
+                break;
+            case 'BTC':
+                this._app = new hw_app_btc_1.default(this._transport);
+                break;
+            default:
+                break;
         }
-        return this._apps[appType];
     }
     startListening() {
         window.addEventListener('message', async (event) => {
@@ -70,52 +85,77 @@ class LedgerWebBridge {
             if (name === config_1.BRIDGE_IFRAME_NAME && method) {
                 const reply = `reply::${app}::${method}::${callType}`;
                 try {
-                    const ledgerApp = await this.createLedgerApp(app, replyOrigin);
                     let call = null;
                     let result = null;
-                    if (method.startsWith('TRANSPORT::')) {
-                        const methodParts = method.split('::');
-                        const { transport } = ledgerApp;
-                        call = transport[methodParts[1]].bind(transport);
+                    if (method === 'UPDATE-TRANSPORT-PREFERENCE') {
+                        const { useLedgerLive } = payload;
+                        await this.clear();
+                        this._useLedgerLive = useLedgerLive || false;
+                        this.sendMessage(replyOrigin, {
+                            action: reply,
+                            success: true
+                        });
                     }
                     else {
-                        call = ledgerApp[method].bind(ledgerApp);
+                        await this.setupLedgerApp(app, replyOrigin);
+                        if (this._app) {
+                            if (method.startsWith('TRANSPORT::')) {
+                                const methodParts = method.split('::');
+                                const { transport } = this._app;
+                                call = transport[methodParts[1]].bind(transport);
+                            }
+                            else {
+                                const ledgerApp = this._app;
+                                call = ledgerApp[method].bind(ledgerApp);
+                            }
+                            const parsedInput = utils_1.parseInputPayload(payload);
+                            switch (callType) {
+                                case 'METHOD':
+                                    result = call(...parsedInput);
+                                    break;
+                                case 'ASYNC_METHOD':
+                                    result = await call(...parsedInput);
+                                    break;
+                                case 'PROP':
+                                    result = call;
+                                    break;
+                                default:
+                                    break;
+                            }
+                            const parsedOutput = utils_1.parseOutputPayload(result);
+                            this.sendMessage(replyOrigin, {
+                                action: reply,
+                                success: true,
+                                payload: parsedOutput
+                            });
+                        }
+                        else {
+                            throw new Error('No ledger app created');
+                        }
                     }
-                    const parsedInput = utils_1.parseInputPayload(payload);
-                    switch (callType) {
-                        case 'METHOD':
-                            result = call(...parsedInput);
-                            break;
-                        case 'ASYNC_METHOD':
-                            result = await call(...parsedInput);
-                            break;
-                        case 'PROP':
-                            result = call;
-                            break;
-                        default:
-                            break;
-                    }
-                    const parsedOutput = utils_1.parseOutputPayload(result);
-                    this.sendMessage(replyOrigin, {
-                        action: reply,
-                        success: true,
-                        payload: parsedOutput
-                    });
                 }
                 catch (error) {
-                    await this.clear();
                     this.sendMessage(replyOrigin, {
                         action: reply,
                         success: false,
                         payload: error
                     });
                 }
+                finally {
+                    if (!this._useLedgerLive) {
+                        await this.clear();
+                    }
+                }
             }
-        });
+        }, false);
     }
     sendMessage(origin, message) {
-        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, message);
-        chrome.runtime.sendMessage(origin, message, (response) => {
+        const data = {
+            ...message,
+            useLedgerLive: this._useLedgerLive
+        };
+        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, data);
+        chrome.runtime.sendMessage(origin, data, (response) => {
         });
     }
 }

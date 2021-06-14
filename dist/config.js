@@ -1,4 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BRIDGE_IFRAME_NAME = void 0;
+exports.LEDGER_APP_NAMES = exports.LEDGER_LIVE_URL = exports.TRANSPORT_CHECK_LIMIT = exports.TRANSPORT_CHECK_DELAY = exports.BRIDGE_IFRAME_NAME = void 0;
 exports.BRIDGE_IFRAME_NAME = 'HW-IFRAME';
+exports.TRANSPORT_CHECK_DELAY = 1000;
+exports.TRANSPORT_CHECK_LIMIT = 120;
+exports.LEDGER_LIVE_URL = 'ws://localhost:8435';
+exports.LEDGER_APP_NAMES = {
+    ETH: 'Ethereum',
+    BTC: 'Bictoin',
+    RBTC: 'Rsk',
+};

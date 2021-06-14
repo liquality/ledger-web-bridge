@@ -10,7 +10,8 @@ export interface CallData {
     app: AppType,
     method: string,
     payload: any,
-    callType: CallType
+    callType: CallType,
+    settings: { useLedgerLive: boolean }
 }
 
 export const TRANSPORT_CHECK_DELAY = 1000;

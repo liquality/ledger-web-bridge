@@ -1,7 +1,5 @@
 import WebSocketTransport from '@ledgerhq/hw-transport-http/lib/WebSocketTransport';
-import Transport from "@ledgerhq/hw-transport";
-import { LEDGER_APP_NAMES, LEDGER_LIVE_URL, TRANSPORT_CHECK_DELAY, TRANSPORT_CHECK_LIMIT } from './config';
-import TransportU2F from '@ledgerhq/hw-transport-u2f';
+import { LEDGER_LIVE_URL, TRANSPORT_CHECK_DELAY, TRANSPORT_CHECK_LIMIT } from './config';
 
 export const parseInputPayload = (payload: any): any => {
     if (payload) {
@@ -52,9 +50,9 @@ export const makeDelay = async (ms: number): Promise<void> =>  {
     return new Promise((success) => setTimeout(success, ms))
 };
 
-export const checkWSTransportLoop = (iteration: number = 0): Promise<void> => {
+export const checkWSTransportLoop = async (iteration: number = 0): Promise<void> => {
     const iterator = iteration || 0
-    return WebSocketTransport.check(LEDGER_LIVE_URL).catch(async () => {
+    return await WebSocketTransport.check(LEDGER_LIVE_URL).catch(async () => {
         await makeDelay(TRANSPORT_CHECK_DELAY)
         if (iterator < TRANSPORT_CHECK_LIMIT) {
             return checkWSTransportLoop(iterator + 1)
@@ -62,25 +60,4 @@ export const checkWSTransportLoop = (iteration: number = 0): Promise<void> => {
             throw new Error('Ledger transport check timeout')
         }
     })
-}
-export const createLedgerTransport = async (app: string, useLedgerLive: boolean): Promise<Transport> => {
-    if (useLedgerLive) {
-        let reestablish = false;
-
-        try {
-            await WebSocketTransport.check(LEDGER_LIVE_URL)
-        } catch (_err) {
-            const appName: string = LEDGER_APP_NAMES[app];
-            window.open(`ledgerlive://bridge?appName=${appName}`);
-            await checkWSTransportLoop();
-            reestablish = true;
-        }
-
-        if (reestablish) {
-            return await WebSocketTransport.open(LEDGER_LIVE_URL);
-        }
-    }
-    else {
-        return await TransportU2F.create()
-    }
 }
