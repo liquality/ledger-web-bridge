@@ -7,7 +7,10 @@ import {
     CallData,
     BRIDGE_IFRAME_NAME,
     LEDGER_APP_NAMES,
-    LEDGER_LIVE_URL
+    LEDGER_LIVE_URL,
+    NetworkType,
+    APP_TYPES_MAP,
+    AppTypeAsset
 } from './config';
 import { checkWSTransportLoop, parseInputPayload, parseOutputPayload } from './utils';
 import TransportU2F from "@ledgerhq/hw-transport-u2f";
@@ -26,7 +29,8 @@ export class LedgerWebBridge {
         this._app = null;
     }
 
-    private appShouldBeCreated(appType: AppType) {
+    private appShouldBeCreated(appTypeAsset: AppTypeAsset) {
+        const appType = APP_TYPES_MAP[appTypeAsset];
         if (!this._app 
             || this._app instanceof BTC && appType === 'ETH'
             || this._app instanceof ETH && appType === 'BTC') {
@@ -37,38 +41,41 @@ export class LedgerWebBridge {
     }
 
 
-    private async setupLedgerApp(appType: AppType, origin: string): Promise<void> {
+    private async setupLedgerApp(network: NetworkType, appTypeAsset: AppTypeAsset, origin: string): Promise<void> {
         if (this._useLedgerLive) {
             let reestablish = false;
 
             try {
                 await WebSocketTransport.check(LEDGER_LIVE_URL)
             } catch (_err) {
-                const appName: string = LEDGER_APP_NAMES[appType];
+                console.log(appTypeAsset, network)
+                const appName: string = LEDGER_APP_NAMES[appTypeAsset][network];
                 window.open(`ledgerlive://bridge?appName=${appName}`);
                 await checkWSTransportLoop();
                 reestablish = true;
             }
 
-            if (this.appShouldBeCreated(appType) || reestablish) {
+            if (this.appShouldBeCreated(appTypeAsset) || reestablish) {
                 this._transport = await WebSocketTransport.open(LEDGER_LIVE_URL);
-                this.createLedgerApp(appType);
+                this.createLedgerApp(appTypeAsset);
             }
         }
         else {
             this._transport = await TransportU2F.create()
-            this.createLedgerApp(appType);
+            this.createLedgerApp(appTypeAsset);
         }
         this._transport?.on('disconnect', async () => {
             await this.clear();
             this.sendMessage(origin, {
-                action: `transport::${appType}::disconnect`,
+                action: `transport::${appTypeAsset}::disconnect`,
                 success: true
             });
         });
     }
 
-    private createLedgerApp(appType: AppType): BTC | ETH {
+    private createLedgerApp(appTypeAsset: AppTypeAsset): BTC | ETH {
+        const appType = APP_TYPES_MAP[appTypeAsset];
+        
         switch (appType) {
             case 'ETH':
                 this._app = new ETH(this._transport);
@@ -93,6 +100,7 @@ export class LedgerWebBridge {
             }
             console.log('[LEDGER-BRIDGE::MESSAGE RECEIVED]::', event);
             const {
+                network,
                 app,
                 method,
                 payload,
@@ -102,7 +110,7 @@ export class LedgerWebBridge {
             const replyOrigin = origin.replace('chrome-extension://', '')
 
             if (name === BRIDGE_IFRAME_NAME && method) {
-                const reply = `reply::${app}::${method}::${callType}`;
+                const reply = `reply::${network}::${app}::${method}::${callType}`;
                 try {
                     let call = null;
                     let result = null;
@@ -116,7 +124,7 @@ export class LedgerWebBridge {
                                 success: true
                             });
                     } else {
-                        await this.setupLedgerApp(app, replyOrigin);
+                        await this.setupLedgerApp(network, app, replyOrigin);
                         if (this._app) {
                             if (method.startsWith('TRANSPORT::')) {
                                 const methodParts = method.split('::');
@@ -156,6 +164,7 @@ export class LedgerWebBridge {
                         }
                     }
                 } catch (error) {
+                    console.error(error);
                     this.sendMessage(replyOrigin,
                         {
                             action: reply,
