@@ -1,137 +1,90 @@
 
 import Transport from "@ledgerhq/hw-transport";
-import ETH from "@ledgerhq/hw-app-eth";
-import BTC from "@ledgerhq/hw-app-btc";
+import ETHApp from "@ledgerhq/hw-app-eth";
+import BTCApp from "@ledgerhq/hw-app-btc";
 import {
-    AppType,
     CallData,
     BRIDGE_IFRAME_NAME,
-    LEDGER_APP_NAMES,
-    LEDGER_LIVE_URL,
-    NetworkType,
     APP_TYPES_MAP,
     AppTypeAsset
 } from './config';
-import { checkWSTransportLoop, parseInputPayload, parseOutputPayload } from './utils';
-import TransportU2F from "@ledgerhq/hw-transport-u2f";
-import WebSocketTransport from '@ledgerhq/hw-transport-http/lib/WebSocketTransport';
+import { parseInputPayload, parseOutputPayload } from './utils';
+import TransportWebUSB from "@ledgerhq/hw-transport-webusb";
 
 declare var chrome: any;
 
 export class LedgerWebBridge {
 
     private _transport: Transport = null;
-    private _useLedgerLive: boolean = false;
-    private _app: BTC | ETH = null;
+    private _port: any;
+    private _extensionId: string;
 
-    private async clear(): Promise<void> {
+    constructor (extensionId: string) {
+        this._extensionId = extensionId;
+    }
+    
+    public get port() : any {
+        this._port = chrome.runtime.connect(this._extensionId, { name: 'LEDGER-WEB-BRIDGE'});
+        this._port?.onDisconnect.addListener((_port: any) =>  this.clear());
+        return this._port;
+    }
+    
+    public async clear(): Promise<void> {
         await this._transport?.close();
-        this._app = null;
+        this._port = null;
     }
 
-    private appShouldBeCreated(appTypeAsset: AppTypeAsset) {
-        const appType = APP_TYPES_MAP[appTypeAsset];
-        if (!this._app 
-            || this._app instanceof BTC && appType === 'ETH'
-            || this._app instanceof ETH && appType === 'BTC') {
-            return true;
-        }
-
-        return false;
-    }
-
-
-    private async setupLedgerApp(network: NetworkType, appTypeAsset: AppTypeAsset, origin: string): Promise<void> {
-        if (this._useLedgerLive) {
-            let reestablish = false;
-
-            try {
-                await WebSocketTransport.check(LEDGER_LIVE_URL)
-            } catch (_err) {
-                console.log(appTypeAsset, network)
-                const appName: string = LEDGER_APP_NAMES[appTypeAsset][network];
-                window.open(`ledgerlive://bridge?appName=${appName}`);
-                await checkWSTransportLoop();
-                reestablish = true;
-            }
-
-            if (this.appShouldBeCreated(appTypeAsset) || reestablish) {
-                this._transport = await WebSocketTransport.open(LEDGER_LIVE_URL);
-                this.createLedgerApp(appTypeAsset);
-            }
-        }
-        else {
-            this._transport = await TransportU2F.create()
-            this.createLedgerApp(appTypeAsset);
-        }
+    public async createTransport(): Promise<void> {
+        this._transport = await TransportWebUSB.create();
         this._transport?.on('disconnect', async () => {
             await this.clear();
-            this.sendMessage(origin, {
-                action: `transport::${appTypeAsset}::disconnect`,
-                success: true
+            this.sendMessage({
+                action: `TRANSPORT_DISCONECTED`
             });
+        });
+        this.sendMessage({
+            action: 'TRANSPORT_CREATED'
         });
     }
 
-    private createLedgerApp(appTypeAsset: AppTypeAsset): BTC | ETH {
+    private createLedgerApp(appTypeAsset: AppTypeAsset): ETHApp | BTCApp {
         const appType = APP_TYPES_MAP[appTypeAsset];
+        if(!this._transport) {
+            this.createTransport();
+        }
         
         switch (appType) {
             case 'ETH':
-                this._app = new ETH(this._transport);
-                break;
+                return new ETHApp(this._transport);
             case 'BTC':
-                this._app = new BTC(this._transport);
-                break;
+                return new BTCApp(this._transport);
             default:
-                break;
+                return null;
         }
     }
 
-    startListening() {
-        window.addEventListener('message', async (event: MessageEvent) => {
-            if (!event) {
-                return
-            }
 
-            const { data, currentTarget, origin } = event;
-            if (!data || !origin || !origin.startsWith('chrome-extension://')) {
-                return
-            }
-            console.log('[LEDGER-BRIDGE::MESSAGE RECEIVED]::', event);
+    listenForMessages() {
+        this.port.onMessage.addListener(async (message: any, sender: any, sendResponse: ()=> void ) => {
+            console.log('[LEDGER-BRIDGE::MESSAGE RECEIVED]::', message, sender);
             const {
                 network,
                 app,
                 method,
                 payload,
                 callType
-            } = data as CallData;
-            const { name } = currentTarget as any;
-            const replyOrigin = origin.replace('chrome-extension://', '')
-
-            if (name === BRIDGE_IFRAME_NAME && method) {
+            } = message as CallData;
                 const reply = `reply::${network}::${app}::${method}::${callType}`;
                 try {
                     let call = null;
                     let result = null;
-                    if (method === 'UPDATE-TRANSPORT-PREFERENCE') {
-                        const { useLedgerLive } = payload;
-                        await this.clear();
-                        this._useLedgerLive = useLedgerLive || false;
-                        this.sendMessage(replyOrigin,
-                            {
-                                action: reply,
-                                success: true
-                            });
-                    } else {
-                        await this.setupLedgerApp(network, app, replyOrigin);
-                        if (this._app) {
+                    const ledgerApp = await this.createLedgerApp(app);
+                        if (ledgerApp) {
                             if (method.startsWith('TRANSPORT::')) {
                                 const methodParts = method.split('::');
-                                const { transport } = this._app
+                                const { transport } = ledgerApp
                                 call = transport[methodParts[1]].bind(transport);
                             } else {
-                                const ledgerApp = this._app;
                                 call = ledgerApp[method].bind(ledgerApp);
                             }
     
@@ -153,7 +106,7 @@ export class LedgerWebBridge {
     
                             const parsedOutput = parseOutputPayload(result)
     
-                            this.sendMessage(replyOrigin,
+                            this.sendMessage(
                                 {
                                     action: reply,
                                     success: true,
@@ -162,38 +115,26 @@ export class LedgerWebBridge {
                         } else {
                             throw new Error('No ledger app created');
                         }
-                    }
                 } catch (error) {
                     console.error(error);
-                    this.sendMessage(replyOrigin,
+                    this.sendMessage(
                         {
                             action: reply,
                             success: false,
                             payload: error
                         });
                 } finally {
-                    if (!this._useLedgerLive) {
-                        await this.clear();
-                    }
+                    //await this.clear();
                 }
-            }
-        }, false);
+        });
     }
 
-    sendMessage(origin: string, message: {
+    sendMessage (message: {
         action: string,
-        success: boolean,
+        success?: boolean,
         payload?: any
     }) {
-        const data = {
-            ...message,
-            useLedgerLive: this._useLedgerLive
-        }
-        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', origin, data);
-        chrome.runtime.sendMessage(origin,
-            data,
-            (response: any) => {
-                //console.log('[HW-BRIDGE]: received message result', response);
-            });
+        console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', message);
+        this._port?.postMessage(message);
     }
 }
