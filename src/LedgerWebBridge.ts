@@ -17,10 +17,14 @@ export class LedgerWebBridge {
 
     private _transport: Transport = null;
     private _port: any;
-    private readonly _origin: string = 'dmbnhcbjpmejblkannpmedcanlgblfcf';
+    private _extensionId: string;
 
+    constructor (extensionId: string) {
+        this._extensionId = extensionId;
+    }
+    
     public get port() : any {
-        this._port = chrome.runtime.connect(this._origin, { name: 'LEDGER-WEB-BRIDGE'});
+        this._port = chrome.runtime.connect(this._extensionId, { name: 'LEDGER-WEB-BRIDGE'});
         this._port?.onDisconnect.addListener((_port: any) =>  this.clear());
         return this._port;
     }

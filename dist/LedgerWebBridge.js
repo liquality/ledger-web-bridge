@@ -10,12 +10,12 @@ const config_1 = require("./config");
 const utils_1 = require("./utils");
 const hw_transport_webusb_1 = __importDefault(require("@ledgerhq/hw-transport-webusb"));
 class LedgerWebBridge {
-    constructor() {
+    constructor(extensionId) {
         this._transport = null;
-        this._origin = 'dmbnhcbjpmejblkannpmedcanlgblfcf';
+        this._extensionId = extensionId;
     }
     get port() {
-        this._port = chrome.runtime.connect(this._origin, { name: 'LEDGER-WEB-BRIDGE' });
+        this._port = chrome.runtime.connect(this._extensionId, { name: 'LEDGER-WEB-BRIDGE' });
         this._port?.onDisconnect.addListener((_port) => this.clear());
         return this._port;
     }
