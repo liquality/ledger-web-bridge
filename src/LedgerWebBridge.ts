@@ -18,39 +18,33 @@ export class LedgerWebBridge {
     private _transport: Transport = null;
     private _port: any;
     private readonly _origin: string = 'dmbnhcbjpmejblkannpmedcanlgblfcf';
-    private _app: BTCApp | ETHApp = null;
 
-    constructor () {
+    public get port() : any {
         this._port = chrome.runtime.connect(this._origin, { name: 'LEDGER-WEB-BRIDGE'});
+        this._port?.onDisconnect.addListener((_port: any) =>  this.clear());
+        return this._port;
     }
-
-    private async clear(): Promise<void> {
+    
+    public async clear(): Promise<void> {
         await this._transport?.close();
-        this._app = null;
+        this._port = null;
     }
 
-    // private appShouldBeCreated(appTypeAsset: AppTypeAsset) {
-    //     const appType = APP_TYPES_MAP[appTypeAsset];
-    //     if (!this._app 
-    //         || this._app instanceof BTC && appType === 'ETH'
-    //         || this._app instanceof ETH && appType === 'BTC') {
-    //         return true;
-    //     }
-
-    //     return false;
-    // }
-
-
-    private async createLedgerApp(appTypeAsset: AppTypeAsset): Promise<ETHApp | BTCApp> {
+    public async createTransport(): Promise<void> {
         this._transport = await TransportWebUSB.create();
         this._transport?.on('disconnect', async () => {
             await this.clear();
             this.sendMessage({
-                action: `transport::${appTypeAsset}::disconnect`,
-                success: true
+                action: `TRANSPORT_DISCONECTED`
             });
         });
+    }
+
+    private createLedgerApp(appTypeAsset: AppTypeAsset): ETHApp | BTCApp {
         const appType = APP_TYPES_MAP[appTypeAsset];
+        if(!this._transport) {
+            this.createTransport();
+        }
         
         switch (appType) {
             case 'ETH':
@@ -63,8 +57,8 @@ export class LedgerWebBridge {
     }
 
 
-    startListening() {
-        this._port.onMessage.addListener(async (message: any, sender: any, sendResponse: ()=> void ) => {
+    listenForMessages() {
+        this.port.onMessage.addListener(async (message: any, sender: any, sendResponse: ()=> void ) => {
             console.log('[LEDGER-BRIDGE::MESSAGE RECEIVED]::', message, sender);
             const {
                 network,
@@ -126,15 +120,14 @@ export class LedgerWebBridge {
                     //await this.clear();
                 }
         });
-        console.log('this._port', this._port);
     }
 
     sendMessage (message: {
         action: string,
-        success: boolean,
+        success?: boolean,
         payload?: any
     }) {
         console.log('[LEDGER-BRIDGE::SENDING MESSAGE TO EXTENSION]', message);
-        this._port.postMessage(message);
+        this._port?.postMessage(message);
     }
 }

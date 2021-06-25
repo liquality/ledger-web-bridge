@@ -1,31 +1,33 @@
 var global = global || window;
-declare var chrome: any;
 
 import './polyfills';
-
 import { LedgerWebBridge } from "./LedgerWebBridge";
 
 const run = () => {
-    const trigger = document.querySelector('#usb');
+    const bridge = new LedgerWebBridge();
+    const trigger = document.querySelector('#enable_usb');
     trigger.addEventListener('click', async (e) => {
         try {
-            const device = await (navigator as any).usb.requestDevice({filters: [{
-                vendorId: 0x2c97
-            }]});
-            console.log('device:', device);
-            const bridge = new LedgerWebBridge();
-            bridge.startListening();
-            bridge.sendMessage(
-                {
-                    action: 'test',
-                    success: true,
-                    payload: { a: 1}
-                })
-            console.log('LEDGER-BRIDGE: start listening');
+            await bridge.createTransport();
+            bridge.sendMessage({
+                action: 'TRANSPORT_CREATED'
+            });
         } catch (err) {
             console.error(err);
         }
     });
+    bridge.listenForMessages();
+    bridge.sendMessage({
+        action: 'LISTENER_STARTED'
+    });
+    window.onbeforeunload = () => { // Prompt on trying to leave app
+        bridge.sendMessage({
+            action: 'BRIDGE_CLOSED'
+        });
+        bridge.clear();
+        return true
+      }
+    console.log('LEDGER-BRIDGE: start listening');
 }
 
 run();
