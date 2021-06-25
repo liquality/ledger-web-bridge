@@ -1,11 +1,6 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkWSTransportLoop = exports.makeDelay = exports.parseOutputPayload = exports.parseInputPayload = void 0;
-const WebSocketTransport_1 = __importDefault(require("@ledgerhq/hw-transport-http/lib/WebSocketTransport"));
-const config_1 = require("./config");
+exports.parseOutputPayload = exports.parseInputPayload = void 0;
 const parseInputPayload = (payload) => {
     if (payload) {
         if (payload.type && payload.type === 'Hex') {
@@ -44,20 +39,3 @@ const parseOutputPayload = (payload) => {
     return payload;
 };
 exports.parseOutputPayload = parseOutputPayload;
-const makeDelay = async (ms) => {
-    return new Promise((success) => setTimeout(success, ms));
-};
-exports.makeDelay = makeDelay;
-const checkWSTransportLoop = async (iteration = 0) => {
-    const iterator = iteration || 0;
-    return await WebSocketTransport_1.default.check(config_1.LEDGER_LIVE_URL).catch(async () => {
-        await exports.makeDelay(config_1.TRANSPORT_CHECK_DELAY);
-        if (iterator < config_1.TRANSPORT_CHECK_LIMIT) {
-            return exports.checkWSTransportLoop(iterator + 1);
-        }
-        else {
-            throw new Error('Ledger transport check timeout');
-        }
-    });
-};
-exports.checkWSTransportLoop = checkWSTransportLoop;
