@@ -9,9 +9,6 @@ const run = () => {
     trigger.addEventListener('click', async (e) => {
         try {
             await bridge.createTransport();
-            bridge.sendMessage({
-                action: 'TRANSPORT_CREATED'
-            });
         } catch (err) {
             console.error(err);
         }

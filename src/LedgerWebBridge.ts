@@ -38,6 +38,9 @@ export class LedgerWebBridge {
                 action: `TRANSPORT_DISCONECTED`
             });
         });
+        this.sendMessage({
+            action: 'TRANSPORT_CREATED'
+        });
     }
 
     private createLedgerApp(appTypeAsset: AppTypeAsset): ETHApp | BTCApp {
